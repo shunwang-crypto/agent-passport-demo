@@ -217,12 +217,3 @@ python run_demo.py
 - 当前重点是安全验证链路完整，不是大规模工程部署
 - 当前前端展示面向竞赛与答辩演示，仍有继续收口和统一文案的空间
 
-## GitHub 提交建议
-
-提交仓库前建议确认：
-
-- 不提交 `agent_passport_state.db`
-- 不提交 `artifacts/`
-- 不提交 `workdir/outputs/`
-- 不提交临时测试目录和本地渲染文件
-- 不提交真实 API Key
