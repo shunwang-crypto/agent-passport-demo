@@ -1,0 +1,67 @@
+<div class="panel-grid">
+  <section class="card span-12">
+    <div class="section-kicker">委托态势</div>
+    <h2>任务级委托状态总览</h2>
+    <p class="card-subtitle">聚焦已签发、已耗尽、当前有效与已撤销委托数量。</p>
+    <div class="mini-metrics compact-top">
+      ${token_summary_cards}
+    </div>
+  </section>
+
+  <section class="card span-8">
+    <div class="section-kicker">智能体身份信息</div>
+    <h2>工作负载身份</h2>
+    <p class="card-subtitle">每个智能体作为独立身份主体执行动作，凭证与能力范围分离管理。</p>
+    <div class="scope-grid">
+      ${agent_identity_cards}
+    </div>
+  </section>
+
+  <section class="card span-4">
+    <div class="section-kicker">一次性令牌</div>
+    <h2>单次消费机制</h2>
+    <div class="stack-list">
+      <article class="stack-card">
+        <strong>任务级委托</strong>
+        <p>令牌绑定任务、主体、动作、资源与有效期，不能跨任务复用。</p>
+      </article>
+      <article class="stack-card">
+        <strong>默认单次消费</strong>
+        <p>默认 max_uses=1，消费后状态变为已耗尽。</p>
+      </article>
+      <article class="stack-card">
+        <strong>防重放控制</strong>
+        <p>一次性能力令牌用后失效，可阻断重复消费攻击。</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <div class="section-kicker">任务委托</div>
+    <h2>按任务查看委托链</h2>
+    <p class="card-subtitle">每个任务会签发多张任务级委托。这里按任务展示查询、报表和发送三个阶段的委托状态。</p>
+    <div class="task-audit-list compact-top">
+      ${delegation_task_cards}
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <div class="section-kicker">发送记录</div>
+    <h2>通过校验的消息</h2>
+    <p class="card-subtitle">这里只记录已经通过网关校验并完成发送的消息。</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>目标</th>
+            <th>内容</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${message_rows}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

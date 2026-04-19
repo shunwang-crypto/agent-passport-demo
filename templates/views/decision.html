@@ -1,0 +1,53 @@
+<div class="panel-grid">
+  <section class="card span-4">
+    <div class="section-kicker">授权校验</div>
+    <h2>接口说明</h2>
+    <p class="card-subtitle">这一页用于查看授权网关的输入约束、处理口径和审计方式。</p>
+    <div class="stack-list">
+      ${decision_contract_cards}
+    </div>
+  </section>
+
+  <section class="card span-8">
+    <div class="section-kicker">本次校验</div>
+    <h2>业务视角结果</h2>
+    <p class="card-subtitle">先看谁申请了什么，再看网关给出的处理结论。</p>
+    <div class="panel-grid">
+      <article class="card span-6">
+        <div class="section-kicker">申请内容</div>
+        <h2>本次授权申请</h2>
+        <div class="summary-panel">${decision_request_summary}</div>
+      </article>
+      <article class="card span-6">
+        <div class="section-kicker">处理结论</div>
+        <h2>网关返回结果</h2>
+        <div class="summary-panel">${decision_response_summary}</div>
+      </article>
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <div class="section-kicker">接口报文参考</div>
+    <h2>请求与响应样例</h2>
+    <p class="card-subtitle">可展开查看授权接口的请求示例与响应结果。</p>
+    <details class="details-panel">
+      <summary>展开查看报文示例</summary>
+      <div class="details-body">
+        <div class="code-stack">
+          <article class="code-panel">
+            <strong>curl 示例</strong>
+            <pre class="code-block">${decision_curl_command}</pre>
+          </article>
+          <article class="code-panel">
+            <strong>请求原文</strong>
+            <pre class="code-block">${decision_request_json}</pre>
+          </article>
+          <article class="code-panel">
+            <strong>响应原文</strong>
+            <pre class="code-block">${decision_response_json}</pre>
+          </article>
+        </div>
+      </div>
+    </details>
+  </section>
+</div>

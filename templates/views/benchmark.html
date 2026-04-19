@@ -1,0 +1,39 @@
+<div class="panel-grid">
+  <section class="card span-12">
+    <div class="section-kicker">安全评测</div>
+    <h2>批量验证结果</h2>
+    <p class="card-subtitle">展示 ${benchmark_catalog_count} 个验证用例的最近一次执行结果。</p>
+    <div class="mini-metrics compact-top">
+      ${benchmark_summary_cards}
+    </div>
+    <div class="benchmark-banner">
+      <strong>最近执行时间</strong>
+      <span>${benchmark_latest_run_at}</span>
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <div class="section-kicker">结果明细</div>
+    <h2>逐用例结果</h2>
+    <p class="card-subtitle">按用例查看预期、实际状态、控制原因与任务编号。“评测结论”表示该用例的实际结果是否符合预期。</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>用例</th>
+            <th>类别</th>
+            <th>预期</th>
+            <th>实际状态</th>
+            <th>控制原因</th>
+            <th>任务编号</th>
+            <th>评测结论</th>
+            <th>目标</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${benchmark_rows}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

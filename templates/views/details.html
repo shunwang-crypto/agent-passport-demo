@@ -1,0 +1,57 @@
+<div class="panel-grid">
+  <section class="card span-12">
+    <div class="section-kicker">审计追踪</div>
+    <h2>动作、结果与原因</h2>
+    <p class="card-subtitle">按任务编号、执行主体、处理结果和时间范围查看完整审计记录。</p>
+    <div class="filter-bar">
+      ${audit_filter_links}
+    </div>
+    <form method="get" action="/" class="filter-form compact-top">
+      <input type="hidden" name="view" value="details" />
+      <input type="hidden" name="agent" value="${audit_filter_agent}" />
+      <input type="hidden" name="decision" value="${audit_filter_decision}" />
+      <label>
+        任务编号
+        <input
+          type="text"
+          name="task"
+          value="${audit_task_query}"
+          placeholder="例如 task_0d4ecb"
+        />
+      </label>
+      <label>
+        时间范围
+        <select name="time_range">
+          ${audit_time_range_options}
+        </select>
+      </label>
+      <button class="secondary" type="submit">应用筛选</button>
+      <a class="action-link secondary" href="/?view=details">清空筛选</a>
+    </form>
+    <p class="filter-hint">${current_filter_hint}</p>
+    <div class="mini-metrics compact-top">
+      ${audit_summary_cards}
+    </div>
+    <div class="task-audit-list compact-top">
+      ${audit_task_cards}
+    </div>
+  </section>
+
+  <section class="card span-7">
+    <div class="section-kicker">时间线</div>
+    <h2>当前筛选结果</h2>
+    <p class="card-subtitle">每个任务会产生多条审计事件。这里按发生顺序展示当前筛选结果的完整事件流水。</p>
+    <div class="timeline">
+      ${timeline_items_full}
+    </div>
+  </section>
+
+  <section class="card span-5">
+    <div class="section-kicker">最近运行</div>
+    <h2>场景记录</h2>
+    <p class="card-subtitle">查看最近执行过的场景、任务编号和最终状态。</p>
+    <div class="run-list">
+      ${run_history_cards}
+    </div>
+  </section>
+</div>

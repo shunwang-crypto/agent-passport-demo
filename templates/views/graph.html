@@ -1,0 +1,67 @@
+<div class="panel-grid">
+  <section class="card span-12">
+    <div class="section-kicker">资源边界</div>
+    <h2>资源、授权与执行路径</h2>
+    <p class="card-subtitle">查看资源范围、授权规则和系统内的执行关系。</p>
+    <div class="result-note compact-top">
+      <strong>当前任务</strong>
+      <p>${graph_runtime_hint}</p>
+    </div>
+    ${relationship_graph}
+  </section>
+
+  <section class="card span-12">
+    <div class="section-kicker">资源目录</div>
+    <h2>受控资源</h2>
+    <p class="card-subtitle">按类型查看资源、敏感级别和允许动作。</p>
+    <div class="table-wrap">
+      <table class="wide-table resource-table">
+        <thead>
+          <tr>
+            <th>资源</th>
+            <th>类型</th>
+            <th>项目</th>
+            <th>敏感级别</th>
+            <th>动作</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${resource_rows}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <div class="section-kicker">最小权限原则</div>
+    <h2>智能体最小权限</h2>
+    <p class="card-subtitle">展示 4 个智能体的职责边界与默认限制。</p>
+    <div class="scope-grid">
+      ${agent_scope_cards}
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <div class="section-kicker">授权规则</div>
+    <h2>初始授权</h2>
+    <p class="card-subtitle">查看根权限和可签发委托的范围。</p>
+    <div class="table-wrap">
+      <table class="wide-table policy-table">
+        <thead>
+          <tr>
+            <th>主体</th>
+            <th>动作</th>
+            <th>资源</th>
+            <th>类型</th>
+            <th>敏感级别</th>
+            <th>效果</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${policy_rows}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

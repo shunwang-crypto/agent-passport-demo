@@ -1,0 +1,59 @@
+<div class="panel-grid overview-grid">
+  <section class="card span-12">
+    <div class="section-kicker">系统能力</div>
+    <h2>四项核心安全能力</h2>
+    <p class="card-subtitle">围绕企业办公多智能体协作，验证身份、授权、委托与审计闭环。</p>
+    <div class="capability-grid">
+      ${overview_capability_cards}
+    </div>
+  </section>
+
+  <section class="card span-12 command-center">
+    <div class="section-kicker">当前任务</div>
+    <h2>当前任务结果</h2>
+    <p class="card-subtitle">聚焦任务编号、任务状态、计划目标、关键资源和最终结果。</p>
+    <div class="summary-panel">
+      ${task_focus_summary}
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <div class="section-kicker">协作过程</div>
+    <h2>四个智能体的当前协作状态</h2>
+    <p class="card-subtitle">展示每个智能体当前动作与阶段结果。</p>
+    <div class="proof-grid">
+      ${agent_status_cards}
+      ${failure_panel}
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <div class="section-kicker">任务产物</div>
+    <h2>任务执行产出</h2>
+    <p class="card-subtitle">汇总任务计划、查询摘要、报表结果和邮件发送结果。</p>
+    <div class="artifact-grid">
+      <article class="stack-card">
+        <strong>任务计划</strong>
+        <div class="summary-panel">${plan_summary_html}</div>
+      </article>
+      <article class="stack-card">
+        <strong>查询摘要</strong>
+        <div class="summary-panel">${query_summary_html}</div>
+      </article>
+      <article class="stack-card">
+        <strong>报表结果</strong>
+        <div class="summary-panel">${report_summary_html}</div>
+      </article>
+      <article class="stack-card">
+        <strong>邮件发送结果</strong>
+        <div class="summary-panel">${mail_summary_html}</div>
+      </article>
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <div class="section-kicker">安全控制</div>
+    <h2>关键验证场景状态</h2>
+    <div class="stack-list">${security_validation_cards}</div>
+  </section>
+</div>
