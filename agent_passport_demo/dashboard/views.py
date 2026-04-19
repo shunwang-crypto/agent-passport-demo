@@ -99,7 +99,7 @@ class DashboardViewMixin:
         policies = self.policy_store.export()
         task_id = str(payload.get("task_id", "")).strip() or (str(result.task_id) if result else "")
         return {
-            "resource_rows": self._resource_rows(resources),
+            "resource_category_sections": self._resource_category_sections(resources),
             "policy_rows": self._policy_rows(policies),
             "relationship_graph": self._relationship_graph(resources),
             "agent_scope_cards": self._agent_scope_cards(),

@@ -144,9 +144,12 @@ class DemoDatabase:
                 risk_level TEXT NOT NULL,
                 approval_required INTEGER NOT NULL DEFAULT 0,
                 approval_ticket TEXT,
+                ttl_seconds INTEGER NOT NULL DEFAULT 300,
                 max_uses INTEGER NOT NULL DEFAULT 1,
                 uses INTEGER NOT NULL DEFAULT 0,
                 revoked INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'active',
+                terminal_reason TEXT NOT NULL DEFAULT '',
                 capability_token TEXT NOT NULL DEFAULT ''
             );
 
@@ -187,6 +190,9 @@ class DemoDatabase:
             """
         )
         self._ensure_column("delegations", "capability_token", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("delegations", "ttl_seconds", "INTEGER NOT NULL DEFAULT 300")
+        self._ensure_column("delegations", "status", "TEXT NOT NULL DEFAULT 'active'")
+        self._ensure_column("delegations", "terminal_reason", "TEXT NOT NULL DEFAULT ''")
         self._ensure_column("outbound_messages", "task_id", "TEXT NOT NULL DEFAULT ''")
         self.conn.commit()
 

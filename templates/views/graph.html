@@ -12,24 +12,10 @@
 
   <section class="card span-12">
     <div class="section-kicker">资源目录</div>
-    <h2>受控资源</h2>
-    <p class="card-subtitle">按类型查看资源、敏感级别和允许动作。</p>
-    <div class="table-wrap">
-      <table class="wide-table resource-table">
-        <thead>
-          <tr>
-            <th>资源</th>
-            <th>类型</th>
-            <th>项目</th>
-            <th>敏感级别</th>
-            <th>动作</th>
-            <th>说明</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${resource_rows}
-        </tbody>
-      </table>
+    <h2>按类别查看资源</h2>
+    <p class="card-subtitle">每个资源类别单独占据一行，便于核对边界与权限范围。</p>
+    <div class="resource-category-stack">
+      ${resource_category_sections}
     </div>
   </section>
 

@@ -35,9 +35,12 @@ class DelegationRecord:
     risk_level: str = "medium"
     approval_required: bool = False
     approval_ticket: str | None = None
+    ttl_seconds: int = 300
     max_uses: int = 1
     uses: int = 0
     revoked: bool = False
+    status: str = "active"
+    terminal_reason: str = ""
     capability_token: str = ""
 
     def is_expired(self, at: datetime | None = None) -> bool:
@@ -46,9 +49,25 @@ class DelegationRecord:
 
     def consume(self) -> None:
         self.uses += 1
+        self.status = "consumed"
+        self.terminal_reason = "completed_once"
+        self.revoked = False
+
+    def expire(self, reason: str = "timeout") -> None:
+        self.status = "expired"
+        self.terminal_reason = reason
+        self.revoked = False
+
+    def revoke(self, reason: str) -> None:
+        self.status = "revoked"
+        self.terminal_reason = reason
+        self.revoked = True
 
     def is_exhausted(self) -> bool:
         return self.uses >= self.max_uses
+
+    def is_active(self) -> bool:
+        return self.status == "active" and not self.revoked
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -63,9 +82,12 @@ class DelegationRecord:
             "risk_level": self.risk_level,
             "approval_required": self.approval_required,
             "approval_ticket": self.approval_ticket,
+            "ttl_seconds": self.ttl_seconds,
             "max_uses": self.max_uses,
             "uses": self.uses,
             "revoked": self.revoked,
+            "status": self.status,
+            "terminal_reason": self.terminal_reason,
             "capability_token": self.capability_token,
         }
 

@@ -69,7 +69,13 @@ def build_wsgi_app(service: DemoService):
 
         if method == "GET" and path == "/":
             body = service.render_dashboard(view=current_view, filters=filters).encode("utf-8")
-            start_response("200 OK", [("Content-Type", "text/html; charset=utf-8")])
+            start_response(
+                "200 OK",
+                [
+                    ("Content-Type", "text/html; charset=utf-8"),
+                    ("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"),
+                ],
+            )
             return [body]
 
         if method == "GET" and path == "/api/state":
@@ -133,21 +139,36 @@ def build_wsgi_app(service: DemoService):
 
             if path == "/run" and action in service._scenario_handlers():
                 service.run_scenario(action)
-                body = service.render_dashboard(view=current_view, filters={}).encode("utf-8")
-                start_response("200 OK", [("Content-Type", "text/html; charset=utf-8")])
-                return [body]
+                start_response(
+                    "303 See Other",
+                    [
+                        ("Location", f"/?view={quote(current_view)}"),
+                        ("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"),
+                    ],
+                )
+                return [b""]
 
             if path == "/benchmark":
                 service.run_benchmark()
-                body = service.render_dashboard(view=current_view, filters={}).encode("utf-8")
-                start_response("200 OK", [("Content-Type", "text/html; charset=utf-8")])
-                return [body]
+                start_response(
+                    "303 See Other",
+                    [
+                        ("Location", f"/?view={quote(current_view)}"),
+                        ("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"),
+                    ],
+                )
+                return [b""]
 
             if path == "/reset":
                 service.reset(clear_history=True)
-                body = service.render_dashboard(view=current_view, filters={}).encode("utf-8")
-                start_response("200 OK", [("Content-Type", "text/html; charset=utf-8")])
-                return [body]
+                start_response(
+                    "303 See Other",
+                    [
+                        ("Location", f"/?view={quote(current_view)}"),
+                        ("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"),
+                    ],
+                )
+                return [b""]
 
         body = b"Not Found"
         start_response("404 Not Found", [("Content-Type", "text/plain; charset=utf-8")])

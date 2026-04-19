@@ -9,6 +9,8 @@
   </head>
   <body data-view="${current_view}">
     <main class="page">
+      <nav class="page-tabs" data-stale-section="true">${view_tabs}</nav>
+
       <section class="card hero">
         <div class="hero-main">
           <div class="hero-copy">
@@ -20,19 +22,17 @@
                   method="post"
                   action="/run"
                   data-pending-title="真实协作运行中"
-                  data-pending-detail="个人助理、数据查询、报表生成、邮件发送四个智能体正在协作执行，请稍候。"
+                  data-pending-detail="个人助理、数据查询、报表生成和邮件发送智能体正在协作执行。"
                 >
                   <input type="hidden" name="action" value="real_collaboration" />
                   <input type="hidden" name="view" value="overview" />
                   <button class="primary" type="submit" data-running-label="运行中...">真实协作</button>
                 </form>
-                <a class="action-link secondary" href="/?view=benchmark">查看安全评测</a>
                 <form
                   method="post"
                   action="/benchmark"
-                  data-confirm="确认立即执行全量安全评测？"
                   data-pending-title="批量评测运行中"
-                  data-pending-detail="正在依次执行安全验证用例。"
+                  data-pending-detail="正在依次执行全部安全验证用例。"
                 >
                   <input type="hidden" name="view" value="benchmark" />
                   <button class="secondary" type="submit" data-running-label="评测中...">运行批量评测</button>
@@ -62,6 +62,11 @@
                       <input type="hidden" name="action" value="tampered_token" />
                       <input type="hidden" name="view" value="overview" />
                       <button class="secondary" type="submit" data-running-label="验证中...">令牌签名篡改</button>
+                    </form>
+                    <form method="post" action="/run" data-pending-title="令牌超时失效验证中" data-pending-detail="正在验证查询令牌超过有效期后的自动失效控制。">
+                      <input type="hidden" name="action" value="expired_delegation" />
+                      <input type="hidden" name="view" value="overview" />
+                      <button class="secondary" type="submit" data-running-label="验证中...">令牌超时失效</button>
                     </form>
                     <form method="post" action="/run" data-pending-title="重放攻击验证中" data-pending-detail="正在验证一次性委托的重复消费防护。">
                       <input type="hidden" name="action" value="replay_attack" />
@@ -104,10 +109,6 @@
         <span>正在获取本轮结果，结果区会在完成后刷新。</span>
       </section>
 
-      <section id="summary-grid" class="summary-grid" data-stale-section="true">
-        ${summary_cards}
-      </section>
-
       <section id="pending-workspace" class="workspace pending-workspace" hidden>
         <section class="card pending-stage">
           <div class="section-kicker">运行中</div>
@@ -116,26 +117,25 @@
           <div class="pending-grid">
             <article class="pending-card">
               <strong>个人助理智能体</strong>
-              <span>正在拆解办公任务</span>
+              <span>正在拆解办公任务。</span>
             </article>
             <article class="pending-card">
               <strong>数据查询智能体</strong>
-              <span>正在申请查询并读取授权数据</span>
+              <span>正在申请查询并读取授权数据。</span>
             </article>
             <article class="pending-card">
               <strong>报表生成智能体</strong>
-              <span>正在生成周报文件</span>
+              <span>正在生成报表产物。</span>
             </article>
             <article class="pending-card">
               <strong>邮件发送智能体</strong>
-              <span>正在准备最终邮件内容</span>
+              <span>正在准备最终邮件内容。</span>
             </article>
           </div>
         </section>
       </section>
 
       <section id="workspace" class="workspace" data-stale-section="true">
-        <nav class="page-tabs">${view_tabs}</nav>
         ${main_view_content}
       </section>
     </main>

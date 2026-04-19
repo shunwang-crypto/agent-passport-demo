@@ -1,45 +1,50 @@
 <div class="panel-grid">
   <section class="card span-12">
-    <div class="section-kicker">委托态势</div>
-    <h2>任务级委托状态总览</h2>
-    <p class="card-subtitle">聚焦已签发、已耗尽、当前有效与已撤销委托数量。</p>
+    <div class="section-kicker">令牌态势</div>
+    <h2>任务级令牌状态总览</h2>
+    <p class="card-subtitle">查看当前已经签发、消费、过期和回收的任务级令牌数量。</p>
     <div class="mini-metrics compact-top">
       ${token_summary_cards}
     </div>
   </section>
 
   <section class="card span-8">
-    <div class="section-kicker">智能体身份信息</div>
+    <div class="section-kicker">智能体身份</div>
     <h2>工作负载身份</h2>
-    <p class="card-subtitle">每个智能体作为独立身份主体执行动作，凭证与能力范围分离管理。</p>
+    <p class="card-subtitle">每个智能体都以独立主体执行动作，身份认证与能力边界分离管理。</p>
     <div class="scope-grid">
       ${agent_identity_cards}
     </div>
   </section>
 
   <section class="card span-4">
-    <div class="section-kicker">一次性令牌</div>
-    <h2>单次消费机制</h2>
+    <div class="section-kicker">状态说明</div>
+    <h2>令牌状态怎么理解</h2>
+    <p class="card-subtitle">这里说明任务级令牌为什么会显示为可用、消费、回收或过期。</p>
     <div class="stack-list">
       <article class="stack-card">
-        <strong>任务级委托</strong>
-        <p>令牌绑定任务、主体、动作、资源与有效期，不能跨任务复用。</p>
+        <strong>可用中</strong>
+        <p>令牌已签发，尚未被消费，且仍在有效期内。通常表示任务还停留在当前执行阶段。</p>
       </article>
       <article class="stack-card">
-        <strong>默认单次消费</strong>
-        <p>默认 max_uses=1，消费后状态变为已耗尽。</p>
+        <strong>已消费</strong>
+        <p>令牌已按一次性规则完成消费，不能再次使用，用于阻断重放攻击。</p>
       </article>
       <article class="stack-card">
-        <strong>防重放控制</strong>
-        <p>一次性能力令牌用后失效，可阻断重复消费攻击。</p>
+        <strong>已回收</strong>
+        <p>任务结束、上游权限撤销或安全控制终止后，未使用令牌会被系统统一回收。</p>
+      </article>
+      <article class="stack-card">
+        <strong>已过期</strong>
+        <p>令牌超过有效期后自动失效。即使未消费，也不能继续调用下游动作。</p>
       </article>
     </div>
   </section>
 
   <section class="card span-12">
-    <div class="section-kicker">任务委托</div>
-    <h2>按任务查看委托链</h2>
-    <p class="card-subtitle">每个任务会签发多张任务级委托。这里按任务展示查询、报表和发送三个阶段的委托状态。</p>
+    <div class="section-kicker">任务令牌</div>
+    <h2>按任务查看令牌链</h2>
+    <p class="card-subtitle">每个任务会显示查询、报表生成和邮件发送三个阶段的任务级令牌状态，以及为什么被消费、回收或失效。</p>
     <div class="task-audit-list compact-top">
       ${delegation_task_cards}
     </div>
@@ -48,7 +53,7 @@
   <section class="card span-12">
     <div class="section-kicker">发送记录</div>
     <h2>通过校验的消息</h2>
-    <p class="card-subtitle">这里只记录已经通过网关校验并完成发送的消息。</p>
+    <p class="card-subtitle">这里只记录已经通过网关校验并成功发出的消息。</p>
     <div class="table-wrap">
       <table>
         <thead>

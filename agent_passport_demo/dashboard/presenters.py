@@ -41,6 +41,8 @@ class DashboardPresenterMixin:
             "delegation_revoked": "上游委托已撤销",
             "delegation_issued": "委托签发完成",
             "delegation_valid": "委托校验通过",
+            "delegation_expired": "委托已过期",
+            "delegation_timeout_wait": "任务等待超过委托有效期",
             "root_permission_revoked": "根权限已撤销",
             "delegation_exhausted": "委托已被消费，不能重复使用",
             "capability_signature_invalid": "能力令牌签名无效",
@@ -123,9 +125,10 @@ class DashboardPresenterMixin:
             "real_collaboration": "正常办公协作",
             "unauthorized_query": "跨部门数据越权",
             "wrong_recipient": "错误收件目标",
-            "revoked_access": "撤权后访问验证",
-            "replay_attack": "重放攻击验证",
+            "revoked_access": "撤权后令牌失效",
+            "replay_attack": "令牌重放攻击",
             "tampered_token": "令牌签名篡改",
+            "expired_delegation": "令牌超时失效",
             "approval_missing": "审批缺失验证",
         }.get(name, name)
 
@@ -149,7 +152,7 @@ class DashboardPresenterMixin:
         cards = [
             ("当前任务", "-" if not result else str(result.task_id)),
             ("任务状态", "待运行" if not result else self._status_label(str(result.status))),
-            ("有效委托", str(len(delegations))),
+            ("有效令牌", str(len(delegations))),
             ("审计事件", str(len(audit_rows))),
         ]
         return self._metric_cards(cards)
@@ -270,7 +273,7 @@ class DashboardPresenterMixin:
         actions = plan.get("action_sequence") if isinstance(plan.get("action_sequence"), list) else []
         approval_required = plan.get("approval_required")
         if isinstance(approval_required, bool):
-            approval_text = "需要审批" if approval_required else "按策略判断"
+            approval_text = "需要审批" if approval_required else "无需审批"
         else:
             approval_text = "待任务生成后确定"
 
@@ -402,7 +405,7 @@ class DashboardPresenterMixin:
                 ("申请动作", str(action.get("name", "-")) or "-"),
                 ("目标资源", str(resource.get("id", "-")) or "-"),
                 ("任务编号", str(context.get("task_id", "-")) or "-"),
-                ("是否消耗委托", "是" if bool(context.get("consume")) else "否"),
+                ("是否消耗令牌", "是" if bool(context.get("consume")) else "否"),
                 ("审计级别", str(context.get("audit_mode", "-")) or "-"),
             ]
         )
@@ -437,7 +440,7 @@ class DashboardPresenterMixin:
             if scenario and scenario not in latest_by_scenario:
                 latest_by_scenario[scenario] = row
 
-        targets = ["unauthorized_query", "wrong_recipient", "revoked_access", "replay_attack", "tampered_token", "approval_missing"]
+        targets = ["unauthorized_query", "wrong_recipient", "revoked_access", "replay_attack", "tampered_token", "expired_delegation", "approval_missing"]
         cards: list[str] = []
         for scenario in targets:
             row = latest_by_scenario.get(scenario)
@@ -542,23 +545,25 @@ class DashboardPresenterMixin:
 
     def _token_summary_cards(self, rows: list[dict[str, object]]) -> str:
         issued = len(rows)
-        revoked = sum(1 for row in rows if bool(row.get("revoked")))
+        revoked = sum(1 for row in rows if self._token_state_label(row) == "已回收")
+        expired = sum(1 for row in rows if self._token_state_label(row) == "已过期")
         exhausted = sum(
             1
             for row in rows
-            if (not bool(row.get("revoked"))) and int(row.get("uses", 0)) >= int(row.get("max_uses", 0))
+            if self._token_state_label(row) == "已消费"
         )
         active = sum(
             1
             for row in rows
-            if (not bool(row.get("revoked"))) and int(row.get("uses", 0)) < int(row.get("max_uses", 0))
+            if self._token_state_label(row) == "可用中"
         )
         return self._metric_cards(
             [
-                ("已签发委托", str(issued)),
-                ("已耗尽委托", str(exhausted)),
-                ("当前有效委托", str(active)),
-                ("已撤销委托", str(revoked)),
+                ("已签发令牌", str(issued)),
+                ("已消费令牌", str(exhausted)),
+                ("当前有效令牌", str(active)),
+                ("已过期令牌", str(expired)),
+                ("已回收令牌", str(revoked)),
             ]
         )
 
@@ -728,8 +733,121 @@ class DashboardPresenterMixin:
             for row in rows
         )
 
+    def _resource_category_sections(self, resources: list[dict[str, str]]) -> str:
+        deduped = self._dedupe_resources(resources)
+        if not deduped:
+            return (
+                "<section class='resource-category-card'>"
+                "<p class='resource-category-empty'>暂无资源记录。</p>"
+                "</section>"
+            )
+
+        grouped: dict[str, list[dict[str, str]]] = {}
+        for row in deduped:
+            key = self._resource_category_key(str(row.get("resource_type", "")))
+            grouped.setdefault(key, []).append(row)
+
+        ordered_keys = ["data", "document", "communication", "execution", "other"]
+        sections: list[str] = []
+        for key in ordered_keys:
+            rows = grouped.get(key, [])
+            if not rows:
+                continue
+            title, description = self._resource_category_meta(key)
+            sections.append(
+                "<section class='resource-category-card'>"
+                "<div class='resource-category-head'>"
+                f"<div><h3>{html.escape(title)}</h3><p>{html.escape(description)}</p></div>"
+                f"<span class='cell-tag'>{len(rows)} 项</span>"
+                "</div>"
+                "<div class='resource-item-grid'>"
+                f"{self._resource_category_rows(rows)}"
+                "</div>"
+                "</section>"
+            )
+        return "".join(sections)
+
+    def _resource_category_rows(self, rows: list[dict[str, str]]) -> str:
+        return "".join(
+            "<article class='resource-item-card'>"
+            "<div class='resource-item-main'>"
+            f"<h4>{html.escape(self._resource_display_name(str(row.get('resource_id', '-'))))}</h4>"
+            f"<p>{html.escape(self._resource_description(str(row.get('resource_id', '-')), str(row.get('description', '-'))))}</p>"
+            "</div>"
+            "<dl class='resource-item-meta'>"
+            f"<div><dt>资源 ID</dt><dd>{html.escape(str(row.get('resource_id', '-')))}</dd></div>"
+            f"<div><dt>所属域</dt><dd>{html.escape(self._project_label(str(row.get('project', '-'))))}</dd></div>"
+            f"<div><dt>敏感级别</dt><dd><span class='cell-tag'>{html.escape(self._sensitivity_label(str(row.get('sensitivity', '-'))))}</span></dd></div>"
+            f"<div><dt>允许动作</dt><dd><div class='pill-row'>{self._actions_html(str(row.get('allowed_actions', '-')))}</div></dd></div>"
+            "</dl>"
+            "</article>"
+            for row in rows
+        )
+
+    def _resource_category_key(self, resource_type: str) -> str:
+        if resource_type == "dataset":
+            return "data"
+        if resource_type in {"document", "sheet"}:
+            return "document"
+        if resource_type in {"mailbox", "chat"}:
+            return "communication"
+        if resource_type in {"tool", "artifact"}:
+            return "execution"
+        return "other"
+
+    def _resource_category_meta(self, key: str) -> tuple[str, str]:
+        return {
+            "data": ("业务数据", "按任务范围控制查询边界，重点防止跨部门读取。"),
+            "document": ("业务文档", "用于摘要、报表输入、版本说明和指标核对，不允许越权读取。"),
+            "communication": ("通信目标", "发送目标必须与任务范围一致，并满足审批要求。"),
+            "execution": ("执行工具与产物", "工具入口与任务产物统一展示，均受任务令牌和写入范围约束。"),
+            "other": ("其他资源", "未归类资源，仍受统一策略约束。"),
+        }.get(key, ("其他资源", "未归类资源，仍受统一策略约束。"))
+
+    def _dedupe_resources(self, resources: list[dict[str, str]]) -> list[dict[str, str]]:
+        unique_rows: dict[str, dict[str, str]] = {}
+        for row in resources:
+            if not isinstance(row, dict):
+                continue
+            resource_id = str(row.get("resource_id", "")).strip()
+            if not resource_id:
+                continue
+            if resource_id in unique_rows:
+                unique_rows[resource_id]["allowed_actions"] = self._merge_action_csv(
+                    unique_rows[resource_id].get("allowed_actions", ""),
+                    str(row.get("allowed_actions", "")),
+                )
+                continue
+            unique_rows[resource_id] = {
+                "resource_id": resource_id,
+                "resource_type": str(row.get("resource_type", "")).strip(),
+                "project": str(row.get("project", "")).strip(),
+                "sensitivity": str(row.get("sensitivity", "")).strip(),
+                "owner": str(row.get("owner", "")).strip(),
+                "description": str(row.get("description", "")).strip(),
+                "allowed_actions": str(row.get("allowed_actions", "")).strip(),
+            }
+
+        return sorted(
+            unique_rows.values(),
+            key=lambda row: (
+                self._resource_category_key(str(row.get("resource_type", ""))),
+                str(row.get("resource_id", "")),
+            ),
+        )
+
+    def _merge_action_csv(self, left: str, right: str) -> str:
+        merged: list[str] = []
+        for raw in (left, right):
+            for item in str(raw).split(","):
+                action = item.strip()
+                if action and action not in merged:
+                    merged.append(action)
+        return ",".join(merged)
+
     def _resource_rows(self, resources: list[dict[str, str]]) -> str:
-        if not resources:
+        deduped = self._dedupe_resources(resources)
+        if not deduped:
             return "<tr><td colspan='6'>暂无资源记录。</td></tr>"
         return "".join(
             "<tr>"
@@ -740,7 +858,7 @@ class DashboardPresenterMixin:
             f"<td><div class='pill-row'>{self._actions_html(str(row.get('allowed_actions', '-')))}</div></td>"
             f"<td>{html.escape(self._resource_description(str(row.get('resource_id', '-')), str(row.get('description', '-'))))}</td>"
             "</tr>"
-            for row in resources
+            for row in deduped
         )
 
     def _policy_rows(self, rows: list[dict[str, str]]) -> str:
@@ -794,8 +912,13 @@ class DashboardPresenterMixin:
         return f"已使用 {uses} / {max_uses}"
 
     def _token_remaining_text(self, row: dict[str, object]) -> str:
-        if bool(row.get("revoked")):
+        state = self._token_state_label(row)
+        if state == "已回收":
             return "-"
+        if state == "已过期":
+            return "已到期"
+        if state == "已消费":
+            return "已消费"
         uses = max(0, int(row.get("uses", 0)))
         max_uses = max(1, int(row.get("max_uses", 0)))
         remaining = max(max_uses - uses, 0)
@@ -830,31 +953,53 @@ class DashboardPresenterMixin:
         )
 
     def _delegation_task_cards(self, rows: list[dict[str, object]]) -> str:
-        if not rows:
-            return "<article class='task-audit-card'><strong>暂无委托记录</strong><p>运行任务后会按任务展示委托链。</p></article>"
-
         grouped: dict[str, list[dict[str, object]]] = {}
         for row in rows:
             task_id = str(row.get("task_id", "") or "-")
             grouped.setdefault(task_id, []).append(row)
 
-        def sort_key(item: tuple[str, list[dict[str, object]]]) -> tuple[str, str]:
-            task_id, items = item
-            latest = ""
-            for entry in items:
-                latest = max(latest, str(entry.get("created_at", entry.get("timestamp", ""))))
-            return (latest, task_id)
+        if not self.run_history and not grouped:
+            return "<article class='task-audit-card'><strong>暂无令牌记录</strong><p>运行任务后会按任务展示任务级令牌链路。</p></article>"
+
+        run_index = {
+            str(row.get("task_id", "") or "-"): index
+            for index, row in enumerate(self.run_history)
+        }
+
+        all_task_ids = []
+        for row in self.run_history:
+            task_id = str(row.get("task_id", "") or "-")
+            if task_id and task_id not in all_task_ids:
+                all_task_ids.append(task_id)
+        for task_id in grouped:
+            if task_id not in all_task_ids:
+                all_task_ids.append(task_id)
+
+        def sort_key(task_id: str) -> tuple[int, str]:
+            return (run_index.get(task_id, -1), task_id)
 
         cards: list[str] = []
-        for task_id, items in sorted(grouped.items(), key=sort_key, reverse=True):
-            cards.append(self._delegation_task_card(task_id, items))
+        for task_id in sorted(all_task_ids, key=sort_key, reverse=True):
+            cards.append(self._delegation_task_card(task_id, grouped.get(task_id, [])))
         return "".join(cards)
 
     def _delegation_task_card(self, task_id: str, rows: list[dict[str, object]]) -> str:
         task_name = self._audit_task_name(task_id, [])
         active_count = sum(1 for row in rows if self._token_state_label(row) == "可用中")
-        used_count = sum(1 for row in rows if self._token_state_label(row) == "已耗尽")
-        revoked_count = sum(1 for row in rows if self._token_state_label(row) == "已撤销")
+        expired_count = sum(1 for row in rows if self._token_state_label(row) == "已过期")
+        used_count = sum(1 for row in rows if self._token_state_label(row) == "已消费")
+        revoked_count = sum(1 for row in rows if self._token_state_label(row) == "已回收")
+        if not rows:
+            latest_status = self._delegation_task_status(rows, task_id=task_id)
+            return (
+                "<article class='task-audit-card'>"
+                "<div class='task-audit-head'>"
+                f"<div><strong>{html.escape(task_name)}</strong><div class='table-note'>任务编号：{html.escape(task_id)} | 令牌 0 张</div></div>"
+                f"<span class='badge {self._status_class(latest_status[1])}'>{html.escape(latest_status[0])}</span>"
+                "</div>"
+                f"<div class='task-audit-reason'>{html.escape(self._delegation_task_reason(task_id))}</div>"
+                "</article>"
+            )
         lines = "".join(
             "<li class='task-audit-event'>"
             f"<span class='task-audit-time'>{html.escape(self._delegation_kind_label(str(row.get('action', ''))))}</span>"
@@ -864,37 +1009,88 @@ class DashboardPresenterMixin:
             "</li>"
             for row in rows
         )
-        latest_status = self._delegation_task_status(rows)
+        latest_status = self._delegation_task_status(rows, task_id=task_id)
         return (
             "<article class='task-audit-card'>"
             "<div class='task-audit-head'>"
-            f"<div><strong>{html.escape(task_name)}</strong><div class='table-note'>任务编号：{html.escape(task_id)} | 委托 {len(rows)} 条，已使用 {used_count} 条，可用 {active_count} 条，已撤销 {revoked_count} 条</div></div>"
+            f"<div><strong>{html.escape(task_name)}</strong><div class='table-note'>任务编号：{html.escape(task_id)} | 令牌 {len(rows)} 张，已消费 {used_count} 张，可用 {active_count} 张，已过期 {expired_count} 张，已回收 {revoked_count} 张</div></div>"
             f"<span class='badge {self._status_class(latest_status[1])}'>{html.escape(latest_status[0])}</span>"
             "</div>"
-            f"<div class='task-audit-reason'>委托链覆盖查询、报表生成和邮件发送三个执行阶段。</div>"
+            f"<div class='task-audit-reason'>{html.escape(self._delegation_task_reason(task_id))}</div>"
             f"<ul class='task-audit-events'>{lines}</ul>"
             "</article>"
         )
 
     def _delegation_kind_label(self, action: str) -> str:
         return {
-            "query": "查询委托",
-            "generate_report": "报表委托",
-            "send_mail": "发送委托",
-        }.get(action, f"{self._action_label(action)}委托")
+            "query": "查询令牌",
+            "generate_report": "报表令牌",
+            "send_mail": "发送令牌",
+        }.get(action, f"{self._action_label(action)}令牌")
 
     def _delegation_summary(self, row: dict[str, object]) -> str:
         action = self._action_label(str(row.get("action", "")))
         resource = self._resource_display_name(str(row.get("resource", "")))
         approval = self._approval_text(row)
-        return f"允许{action}：{resource}；审批要求：{approval}"
+        ttl_seconds = max(1, int(row.get("ttl_seconds", 0) or 0))
+        expires_at = str(row.get("expires_at", "")).strip()
+        expiry_text = self._format_display_time(expires_at) if expires_at else "-"
+        state_label = self._token_state_label(row)
+        terminal_reason = self._token_terminal_reason_label(row)
+        return (
+            f"允许{action}：{resource}；审批要求：{approval}；有效期：{ttl_seconds} 秒；"
+            f"失效时间：{expiry_text}；当前状态：{state_label}；终止原因：{terminal_reason}"
+        )
 
-    def _delegation_task_status(self, rows: list[dict[str, object]]) -> tuple[str, str]:
+    def _delegation_task_status(self, rows: list[dict[str, object]], *, task_id: str) -> tuple[str, str]:
+        task_outcome = next(
+            (str(row.get("status", "")).strip() for row in self.run_history if str(row.get("task_id", "")) == task_id),
+            "",
+        )
+        if not rows:
+            if task_outcome == "success":
+                return ("未进入令牌阶段", "success")
+            if task_outcome in {"denied", "error"}:
+                return ("预检阶段已拦截", "denied")
+            return ("暂无委托记录", "idle")
         if any(self._token_state_label(row) == "可用中" for row in rows):
-            return ("存在待执行委托", "success")
-        if any(self._token_state_label(row) == "已撤销" for row in rows):
-            return ("包含已撤销委托", "denied")
-        return ("委托已完成消费", "success")
+            return ("存在未完成令牌", "success")
+        if any(self._token_state_label(row) == "已过期" for row in rows):
+            return ("存在超时失效令牌", "denied")
+        if task_outcome == "success":
+            if any(self._token_state_label(row) == "已回收" for row in rows):
+                return ("任务结束后已回收", "success")
+            return ("令牌已全部消费", "success")
+        if task_outcome in {"denied", "error"}:
+            if any(self._token_state_label(row) == "已回收" for row in rows):
+                return ("任务中止后已回收", "denied")
+            return ("任务已拦截", "denied")
+        if any(self._token_state_label(row) == "已回收" for row in rows):
+            return ("任务结束已回收", "success")
+        return ("令牌已消费完成", "success")
+
+    def _delegation_task_reason(self, task_id: str) -> str:
+        for row in self.run_history:
+            if str(row.get("task_id", "")) == task_id:
+                scenario = str(row.get("scenario", "")).strip()
+                if scenario == "unauthorized_query":
+                    return "该任务在根权限预检阶段已被拦截，未签发任何下游任务级令牌。"
+                if scenario == "revoked_access":
+                    return "该任务在撤销根权限后终止，未继续签发新的查询令牌。"
+                if scenario == "expired_delegation":
+                    return "查询令牌签发后被模拟推进到超过有效期，再次使用时会命中“令牌超时失效”控制。"
+                if scenario == "replay_attack":
+                    return "该任务用于验证一次性令牌不能重复消费。首次使用后令牌会耗尽，再次调用将被拦截。"
+                if scenario == "approval_missing":
+                    return "邮件发送属于高风险动作。缺少审批票据时，发送令牌即使已签发，也不能通过最终校验。"
+                if scenario == "wrong_recipient":
+                    return "任务会走到发送阶段，但目标邮箱超出本次任务范围，因此发送令牌会在目标校验阶段被拦截。"
+                if scenario == "tampered_token":
+                    return "该任务会在查询阶段验证被篡改的任务级令牌，网关会因签名失效而拒绝继续执行。"
+                if scenario == "real_collaboration":
+                    return "该任务完整覆盖查询、报表生成和邮件发送三个阶段，已消费令牌会保留消费结果，未使用令牌会在任务结束后自动回收。"
+                break
+        return "按任务展示查询、报表生成和邮件发送阶段的任务级令牌状态。"
 
     def _audit_task_cards(self, rows: list[dict[str, object]]) -> str:
         if not rows:
@@ -917,6 +1113,7 @@ class DashboardPresenterMixin:
         status_label, status_class = self._audit_task_status(rows)
         reason_label = self._reason_label(str(latest.get("reason_code", "")))
         task_name = self._audit_task_name(task_id, rows)
+        latest_time = self._format_display_time(latest.get("timestamp", ""))
         event_lines = "".join(
             "<li class='task-audit-event'>"
             f"<span class='task-audit-time'>{html.escape(self._format_display_time(row.get('timestamp', '')))}</span>"
@@ -932,8 +1129,11 @@ class DashboardPresenterMixin:
             f"<div><strong>{html.escape(task_name)}</strong><div class='table-note'>任务编号：{html.escape(task_id)} | 共 {len(rows)} 条审计事件，允许 {allow_count} 条，拦截 {deny_count} 条</div></div>"
             f"<span class='badge {status_class}'>{html.escape(status_label)}</span>"
             "</div>"
-            f"<div class='task-audit-reason'>最新控制结论：{html.escape(reason_label)}</div>"
+            f"<div class='task-audit-reason'>最新控制结论：{html.escape(reason_label)} | 最后更新时间：{html.escape(latest_time)}</div>"
+            "<details class='task-audit-details'>"
+            f"<summary>查看该任务事件（{len(rows)} 条）</summary>"
             f"<ul class='task-audit-events'>{event_lines}</ul>"
+            "</details>"
             "</article>"
         )
 
@@ -1125,11 +1325,48 @@ class DashboardPresenterMixin:
         ticket = row.get("approval_ticket")
         return f"审批票据 {ticket}" if ticket else "缺少审批票据"
 
+    def _token_terminal_reason_label(self, row: dict[str, object]) -> str:
+        reason = str(row.get("terminal_reason", "")).strip()
+        if not reason:
+            state = self._token_state_label(row)
+            if state == "可用中":
+                return "等待下游执行"
+            return "未记录"
+        return {
+            "completed_once": "令牌已按一次性规则完成消费",
+            "timeout": "超过有效期后自动失效",
+            "task_completed_cleanup": "任务完成后回收未使用令牌",
+            "task_terminated": "任务中止后回收未使用令牌",
+            "root_permission_revoked": "根权限撤销后系统主动回收",
+            "approval_missing": "缺少审批票据，系统主动回收",
+            "target_mismatch": "目标超出授权范围，系统主动回收",
+            "resource_not_in_scope": "资源超出授权范围，系统主动回收",
+            "delegation_exhausted": "令牌已被重复消费拦截",
+        }.get(reason, self._reason_label(reason))
+
     def _token_state_label(self, row: dict[str, object]) -> str:
+        state = str(row.get("status", "")).strip()
+        uses = int(row.get("uses", 0) or 0)
+        max_uses = int(row.get("max_uses", 0) or 0)
+        if max_uses > 0 and uses >= max_uses:
+            return "已消费"
+        if state == "consumed":
+            return "已消费"
+        if state == "expired":
+            return "已过期"
+        if state == "revoked":
+            return "已回收"
+        if state == "active":
+            return "可用中"
         if bool(row.get("revoked")):
-            return "已撤销"
-        if int(row.get("uses", 0)) >= int(row.get("max_uses", 0)):
-            return "已耗尽"
+            return "已回收"
+        expires_at = str(row.get("expires_at", "")).strip()
+        if expires_at:
+            try:
+                if datetime.fromisoformat(expires_at) <= datetime.now(timezone.utc):
+                    return "已过期"
+            except ValueError:
+                pass
         return "可用中"
 
     def _latency_label(self, value: object) -> str:

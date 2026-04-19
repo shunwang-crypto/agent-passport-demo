@@ -1,4 +1,98 @@
 <div class="panel-grid overview-grid">
+  <section class="card span-12 overview-launcher">
+    <div class="overview-launcher-head">
+      <div class="overview-launcher-copy">
+        <div class="section-kicker">字节 AI FORCE · 企业办公多智能体安全控制台</div>
+        <h2>智能体通行证网关</h2>
+        <p class="card-subtitle">通过一条真实办公链路，验证身份、授权、委托和审计闭环。</p>
+      </div>
+      <div class="result-block overview-result">
+        <div class="block-label">最近一次运行</div>
+        <div class="status ${last_status_class}">${last_status_label}</div>
+        <strong>${last_title}</strong>
+        <p>${last_detail}</p>
+        <span>${last_meta_line}</span>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="controls-main">
+        <form
+          method="post"
+          action="/run"
+          data-pending-title="真实协作运行中"
+          data-pending-detail="个人助理、数据查询、报表生成和邮件发送智能体正在协作执行。"
+        >
+          <input type="hidden" name="action" value="real_collaboration" />
+          <input type="hidden" name="view" value="overview" />
+          <button class="primary" type="submit" data-running-label="运行中...">真实协作</button>
+        </form>
+        <form
+          method="post"
+          action="/benchmark"
+          data-pending-title="批量评测运行中"
+          data-pending-detail="正在依次执行全部安全验证用例。"
+        >
+          <input type="hidden" name="view" value="overview" />
+          <button class="secondary" type="submit" data-running-label="评测中...">运行批量评测</button>
+        </form>
+      </div>
+      <p class="control-hint">${real_collaboration_button_hint}</p>
+      <details class="details-panel secondary-actions">
+        <summary>更多操作</summary>
+        <div class="details-body">
+          <div class="controls controls-secondary">
+            <form method="post" action="/run" data-pending-title="跨部门数据越权验证中" data-pending-detail="正在验证数据查询智能体的资源边界。">
+              <input type="hidden" name="action" value="unauthorized_query" />
+              <input type="hidden" name="view" value="overview" />
+              <button class="secondary" type="submit" data-running-label="验证中...">跨部门数据越权</button>
+            </form>
+            <form method="post" action="/run" data-pending-title="错误收件目标验证中" data-pending-detail="正在验证邮件发送智能体的目标边界。">
+              <input type="hidden" name="action" value="wrong_recipient" />
+              <input type="hidden" name="view" value="overview" />
+              <button class="secondary" type="submit" data-running-label="验证中...">错误收件目标</button>
+            </form>
+            <form method="post" action="/run" data-pending-title="撤权后访问验证中" data-pending-detail="正在验证撤权后的任务传播控制。">
+              <input type="hidden" name="action" value="revoked_access" />
+              <input type="hidden" name="view" value="overview" />
+              <button class="danger" type="submit" data-running-label="验证中...">撤权后访问验证</button>
+            </form>
+            <form method="post" action="/run" data-pending-title="令牌签名篡改验证中" data-pending-detail="正在验证能力令牌的验签逻辑。">
+              <input type="hidden" name="action" value="tampered_token" />
+              <input type="hidden" name="view" value="overview" />
+              <button class="secondary" type="submit" data-running-label="验证中...">令牌签名篡改</button>
+            </form>
+            <form method="post" action="/run" data-pending-title="令牌超时失效验证中" data-pending-detail="正在验证查询令牌超过有效期后的自动失效控制。">
+              <input type="hidden" name="action" value="expired_delegation" />
+              <input type="hidden" name="view" value="overview" />
+              <button class="secondary" type="submit" data-running-label="验证中...">令牌超时失效</button>
+            </form>
+            <form method="post" action="/run" data-pending-title="重放攻击验证中" data-pending-detail="正在验证一次性委托的重复消费防护。">
+              <input type="hidden" name="action" value="replay_attack" />
+              <input type="hidden" name="view" value="overview" />
+              <button class="secondary" type="submit" data-running-label="验证中...">重放攻击验证</button>
+            </form>
+            <form method="post" action="/run" data-pending-title="审批缺失验证中" data-pending-detail="正在验证高风险邮件发送的审批要求。">
+              <input type="hidden" name="action" value="approval_missing" />
+              <input type="hidden" name="view" value="overview" />
+              <button class="secondary" type="submit" data-running-label="验证中...">审批缺失验证</button>
+            </form>
+            <form
+              method="post"
+              action="/reset"
+              data-confirm="确认重置运行环境？"
+              data-pending-title="正在重置环境"
+              data-pending-detail="系统正在清空运行状态与最新输出。"
+            >
+              <input type="hidden" name="view" value="overview" />
+              <button class="ghost" type="submit" data-running-label="重置中...">重置环境</button>
+            </form>
+          </div>
+        </div>
+      </details>
+      <div class="hero-links">${artifact_download_html}</div>
+    </div>
+  </section>
+
   <section class="card span-12">
     <div class="section-kicker">系统能力</div>
     <h2>四项核心安全能力</h2>

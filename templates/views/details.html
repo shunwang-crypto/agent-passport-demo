@@ -1,8 +1,8 @@
 <div class="panel-grid">
-  <section class="card span-12">
+  <section class="card span-8">
     <div class="section-kicker">审计追踪</div>
-    <h2>动作、结果与原因</h2>
-    <p class="card-subtitle">按任务编号、执行主体、处理结果和时间范围查看完整审计记录。</p>
+    <h2>按任务查看审计结果</h2>
+    <p class="card-subtitle">每个任务汇总展示最终结果、控制原因和该任务的完整事件链。</p>
     <div class="filter-bar">
       ${audit_filter_links}
     </div>
@@ -37,16 +37,7 @@
     </div>
   </section>
 
-  <section class="card span-7">
-    <div class="section-kicker">时间线</div>
-    <h2>当前筛选结果</h2>
-    <p class="card-subtitle">每个任务会产生多条审计事件。这里按发生顺序展示当前筛选结果的完整事件流水。</p>
-    <div class="timeline">
-      ${timeline_items_full}
-    </div>
-  </section>
-
-  <section class="card span-5">
+  <section class="card span-4">
     <div class="section-kicker">最近运行</div>
     <h2>场景记录</h2>
     <p class="card-subtitle">查看最近执行过的场景、任务编号和最终状态。</p>

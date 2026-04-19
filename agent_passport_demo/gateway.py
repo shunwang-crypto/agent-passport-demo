@@ -175,6 +175,8 @@ class AuthorizationGateway:
                 "expires_at": record.expires_at.isoformat(timespec="seconds"),
                 "max_uses": record.max_uses,
                 "uses": record.uses,
+                "status": record.status,
+                "terminal_reason": record.terminal_reason,
             }
         )
         return metadata

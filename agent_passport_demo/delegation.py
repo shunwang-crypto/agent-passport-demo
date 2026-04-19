@@ -40,6 +40,7 @@ class DelegationManager:
             risk_level=risk_level,
             approval_required=approval_required,
             approval_ticket=approval_ticket,
+            ttl_seconds=ttl_seconds,
             max_uses=max_uses,
         )
         issued_at = now_utc().isoformat(timespec="seconds")
@@ -61,6 +62,7 @@ class DelegationManager:
                 "risk_level": record.risk_level,
                 "approval_required": record.approval_required,
                 "approval_ticket": record.approval_ticket,
+                "ttl_seconds": record.ttl_seconds,
                 "exp": record.expires_at.isoformat(timespec="seconds"),
                 "max_uses": record.max_uses,
             }
@@ -79,11 +81,14 @@ class DelegationManager:
                 risk_level,
                 approval_required,
                 approval_ticket,
+                ttl_seconds,
                 max_uses,
                 uses,
                 revoked,
+                status,
+                terminal_reason,
                 capability_token
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.delegation_id,
@@ -97,9 +102,12 @@ class DelegationManager:
                 record.risk_level,
                 1 if record.approval_required else 0,
                 record.approval_ticket,
+                record.ttl_seconds,
                 record.max_uses,
                 record.uses,
                 1 if record.revoked else 0,
+                record.status,
+                record.terminal_reason,
                 record.capability_token,
             ),
         )
@@ -165,15 +173,18 @@ class DelegationManager:
         record = self._get(delegation_id)
         if record is None:
             return None
+        record.consume()
         self.database.execute(
             """
             UPDATE delegations
-            SET uses = uses + 1
+            SET uses = uses + 1,
+                status = ?,
+                terminal_reason = ?,
+                revoked = 0
             WHERE delegation_id = ?
             """,
-            (delegation_id,),
+            (record.status, record.terminal_reason, delegation_id),
         )
-        record.consume()
         return record
 
     def revoke_for_root_resource(
@@ -182,19 +193,90 @@ class DelegationManager:
         root_principal: str,
         action: str,
         resource: str,
+        reason: str = "root_permission_revoked",
     ) -> int:
         cursor = self.database.execute(
             """
             UPDATE delegations
-            SET revoked = 1
+            SET revoked = 1,
+                status = 'revoked',
+                terminal_reason = ?
             WHERE root_principal = ?
               AND action = ?
               AND resource_id = ?
               AND revoked = 0
             """,
-            (root_principal, action, resource),
+            (reason, root_principal, action, resource),
         )
         return int(cursor.rowcount)
+
+    def revoke_for_task(self, task_id: str, *, reason: str = "task_terminated") -> int:
+        cursor = self.database.execute(
+            """
+            UPDATE delegations
+            SET revoked = 1,
+                status = 'revoked',
+                terminal_reason = ?
+            WHERE task_id = ?
+              AND revoked = 0
+              AND uses < max_uses
+              AND expires_at > ?
+            """,
+            (reason, task_id, now_utc().isoformat(timespec="seconds")),
+        )
+        return int(cursor.rowcount)
+
+    def expire_now(self, delegation_id: str) -> DelegationRecord | None:
+        record = self._get(delegation_id)
+        if record is None:
+            return None
+
+        expired_at = now_utc()
+        record.expire("timeout")
+        record.expires_at = expired_at
+        record.capability_token = self.token_service.issue(
+            {
+                "jti": record.delegation_id,
+                "iss": record.from_principal,
+                "sub": record.to_principal,
+                "aud": self.token_service.audience,
+                "iat": expired_at.isoformat(timespec="seconds"),
+                "nbf": expired_at.isoformat(timespec="seconds"),
+                "ver": self.token_service.version,
+                "root_principal": record.root_principal,
+                "from_principal": record.from_principal,
+                "to_principal": record.to_principal,
+                "task_id": record.task_id,
+                "action": record.action,
+                "resource": record.resource,
+                "risk_level": record.risk_level,
+                "approval_required": record.approval_required,
+                "approval_ticket": record.approval_ticket,
+                "ttl_seconds": record.ttl_seconds,
+                "exp": expired_at.isoformat(timespec="seconds"),
+                "max_uses": record.max_uses,
+            }
+        )
+
+        self.database.execute(
+            """
+            UPDATE delegations
+            SET expires_at = ?,
+                capability_token = ?,
+                status = ?,
+                terminal_reason = ?,
+                revoked = 0
+            WHERE delegation_id = ?
+            """,
+            (
+                record.expires_at.isoformat(timespec="seconds"),
+                record.capability_token,
+                record.status,
+                record.terminal_reason,
+                delegation_id,
+            ),
+        )
+        return record
 
     def export(self, *, include_sensitive: bool = False) -> list[dict[str, object]]:
         rows = self.database.fetch_all(
@@ -211,9 +293,12 @@ class DelegationManager:
                 d.risk_level,
                 d.approval_required,
                 d.approval_ticket,
+                d.ttl_seconds,
                 d.max_uses,
                 d.uses,
                 d.revoked,
+                d.status,
+                d.terminal_reason,
                 d.capability_token,
                 r.resource_type,
                 r.sensitivity
@@ -236,9 +321,12 @@ class DelegationManager:
                 "risk_level": str(row["risk_level"]),
                 "approval_required": bool(row["approval_required"]),
                 "approval_ticket": row["approval_ticket"],
+                "ttl_seconds": int(row["ttl_seconds"]),
                 "max_uses": int(row["max_uses"]),
                 "uses": int(row["uses"]),
                 "revoked": bool(row["revoked"]),
+                "status": str(row["status"] or "active"),
+                "terminal_reason": str(row["terminal_reason"] or ""),
                 "capability_token_preview": mask_capability_token(str(row["capability_token"] or "")),
                 "resource_type": str(row["resource_type"] or "unknown"),
                 "sensitivity": str(row["sensitivity"] or "-"),
@@ -274,8 +362,11 @@ class DelegationManager:
             risk_level=str(row["risk_level"]),
             approval_required=bool(row["approval_required"]),
             approval_ticket=row["approval_ticket"],
+            ttl_seconds=int(row["ttl_seconds"]),
             max_uses=int(row["max_uses"]),
             uses=int(row["uses"]),
             revoked=bool(row["revoked"]),
+            status=str(row["status"] or "active"),
+            terminal_reason=str(row["terminal_reason"] or ""),
             capability_token=str(row["capability_token"] or ""),
         )

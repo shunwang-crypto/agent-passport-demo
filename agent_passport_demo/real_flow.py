@@ -21,6 +21,9 @@ class FlowMutation:
     override_query_resource: str | None = None
     override_recipient: str | None = None
     revoke_root_query_permission: bool = False
+    expire_query_delegation: bool = False
+    query_ttl_seconds: int | None = None
+    simulated_wait_seconds: int = 0
     tamper_query_token: bool = False
     replay_query: bool = False
     remove_mail_approval_ticket: bool = False
@@ -66,6 +69,9 @@ class FlowRuntime:
     query_token: str = ""
     report_token: str = ""
     mail_token: str = ""
+    query_ttl_seconds: int = 0
+    report_ttl_seconds: int = 0
+    mail_ttl_seconds: int = 0
     query_resource: str = ""
     recipient: str = ""
     output_path: str = ""
@@ -152,6 +158,19 @@ SCENARIO_PROFILES: dict[str, ScenarioProfile] = {
         allowed_resources=("dataset:sales_week15",),
         allowed_targets=("mail:manager_zhang",),
         mutation=FlowMutation(tamper_query_token=True),
+    ),
+    "expired_delegation": ScenarioProfile(
+        scenario="expired_delegation",
+        expected_status="denied",
+        success_reason_code="security_control_failed",
+        success_title="超时令牌异常放行",
+        deny_reason_code="capability_expired",
+        deny_title="超时令牌已失效",
+        deny_detail="查询令牌超过有效期后再次使用，网关已拒绝。",
+        user_goal=DEFAULT_GOAL,
+        allowed_resources=("dataset:sales_week15",),
+        allowed_targets=("mail:manager_zhang",),
+        mutation=FlowMutation(expire_query_delegation=True, query_ttl_seconds=30, simulated_wait_seconds=31),
     ),
     "approval_missing": ScenarioProfile(
         scenario="approval_missing",
@@ -243,6 +262,7 @@ class RealCollaborationFlow:
             risk_level="medium",
             approval_required=False,
             approval_ticket=None,
+            ttl_seconds=self._delegation_ttl_seconds("query", profile),
             max_uses=1,
             event_type="delegation_issued",
             summary="助理向数据查询 Agent 签发查询委托。",
@@ -251,6 +271,13 @@ class RealCollaborationFlow:
             reason_code = query_denied_reason or profile.deny_reason_code
             return self._finalize_denied(profile, runtime, "query_delegation", reason_code, profile.deny_detail)
         runtime.query_token = query_delegation.capability_token
+        runtime.query_ttl_seconds = int(query_delegation.ttl_seconds)
+
+        if profile.mutation.expire_query_delegation:
+            self._simulate_timeout_wait(runtime, query_delegation.ttl_seconds, profile.mutation.simulated_wait_seconds)
+            expired_record = self.delegation_manager.expire_now(query_delegation.delegation_id)
+            if expired_record is not None:
+                runtime.query_token = expired_record.capability_token
 
         if profile.mutation.tamper_query_token:
             runtime.query_token = runtime.query_token[:-1] + ("0" if runtime.query_token[-1] != "0" else "1")
@@ -271,7 +298,13 @@ class RealCollaborationFlow:
                 )
         except AuthorizationError as exc:
             reason_code = self._latest_reason_code(runtime.task_id) or profile.deny_reason_code
-            return self._finalize_denied(profile, runtime, "query_gateway", reason_code, str(exc))
+            return self._finalize_denied(
+                profile,
+                runtime,
+                "query_gateway",
+                reason_code,
+                self._localized_reason_text(profile, reason_code, str(exc)),
+            )
         except FileNotFoundError:
             return self._finalize_denied(profile, runtime, "query_storage", "dataset_not_found", "授权数据文件不存在。")
 
@@ -310,6 +343,7 @@ class RealCollaborationFlow:
             risk_level="medium",
             approval_required=False,
             approval_ticket=None,
+            ttl_seconds=self._delegation_ttl_seconds("generate_report", profile),
             max_uses=1,
             event_type="delegation_issued",
             summary="数据查询 Agent 向报表生成 Agent 签发报表委托。",
@@ -326,6 +360,7 @@ class RealCollaborationFlow:
                 else "根权限已被撤销，无法继续签发报表委托。",
             )
         runtime.report_token = report_delegation.capability_token
+        runtime.report_ttl_seconds = int(report_delegation.ttl_seconds)
 
         report_result, report_result_meta = self.report_agent.generate_report_authorized(
             task_id=runtime.task_id,
@@ -376,6 +411,7 @@ class RealCollaborationFlow:
             risk_level="high",
             approval_required=True,
             approval_ticket=approval_ticket,
+            ttl_seconds=self._delegation_ttl_seconds("send_mail", profile),
             max_uses=1,
             event_type="delegation_issued",
             summary="报表生成 Agent 向邮件发送 Agent 签发发送委托。",
@@ -392,6 +428,7 @@ class RealCollaborationFlow:
                 else "根权限已被撤销，无法继续签发发送委托。",
             )
         runtime.mail_token = mail_delegation.capability_token
+        runtime.mail_ttl_seconds = int(mail_delegation.ttl_seconds)
 
         mail_result, mail_result_meta = self.mail_agent.compose_mail(
             recipient=str(runtime.mail_request.get("requested_target", "")),
@@ -509,6 +546,7 @@ class RealCollaborationFlow:
         risk_level: str,
         approval_required: bool,
         approval_ticket: str | None,
+        ttl_seconds: int,
         max_uses: int,
         event_type: str,
         summary: str,
@@ -536,6 +574,7 @@ class RealCollaborationFlow:
             risk_level=risk_level,
             approval_required=approval_required,
             approval_ticket=approval_ticket,
+            ttl_seconds=ttl_seconds,
             max_uses=max_uses,
         )
         self.audit_ledger.record(
@@ -550,10 +589,63 @@ class RealCollaborationFlow:
                 "reason_code": "delegation_issued",
                 "delegation_id": record.delegation_id,
                 "root_principal": root_principal,
+                "ttl_seconds": record.ttl_seconds,
+                "expires_at": record.expires_at.isoformat(timespec="seconds"),
                 "summary": summary,
             },
         )
         return record, None
+
+    def _delegation_ttl_seconds(self, action: str, profile: ScenarioProfile) -> int:
+        if action == "query" and profile.mutation.query_ttl_seconds is not None:
+            return max(1, int(profile.mutation.query_ttl_seconds))
+        return {
+            "query": 30,
+            "generate_report": 45,
+            "send_mail": 45,
+        }.get(action, 30)
+
+    def _simulate_timeout_wait(self, runtime: FlowRuntime, ttl_seconds: int, wait_seconds: int) -> None:
+        delay = max(wait_seconds, ttl_seconds + 1)
+        self._append_trace(
+            runtime,
+            "query_timeout_wait",
+            "pending",
+            "delegation_timeout_wait",
+            f"已模拟任务卡住 {delay} 秒，等待查询令牌超过有效期。",
+        )
+        self.audit_ledger.record(
+            event_type="task_lifecycle",
+            task_id=runtime.task_id,
+            principal="user:xiaoming",
+            action="task_wait",
+            resource="task:sales_report",
+            decision="deny",
+            reason="task delayed for timeout simulation",
+            metadata={
+                "reason_code": "delegation_timeout_wait",
+                "reason_text": f"任务停留 {delay} 秒，等待查询令牌超时失效。",
+                "ttl_seconds": ttl_seconds,
+                "wait_seconds": delay,
+                "summary": f"已模拟任务卡住 {delay} 秒，等待查询令牌超过有效期。",
+            },
+        )
+        self.audit_ledger.record(
+            event_type="policy_change",
+            task_id=runtime.task_id,
+            principal=self.assistant_agent.identity.principal,
+            action="query",
+            resource=str(runtime.query_request.get("requested_resource", "")),
+            decision="deny",
+            reason="delegation expired",
+            metadata={
+                "reason_code": "capability_expired",
+                "reason_text": f"查询令牌已超过 {ttl_seconds} 秒有效期，系统终止任务并发出超时告警。",
+                "ttl_seconds": ttl_seconds,
+                "wait_seconds": delay,
+                "summary": f"查询令牌已超过 {ttl_seconds} 秒有效期，系统准备终止任务。",
+            },
+        )
 
     def _delegation_denied_reason(self, runtime: FlowRuntime, action: str, resource: str) -> str:
         if action == "query" and resource not in runtime.allowed_resources:
@@ -586,6 +678,20 @@ class RealCollaborationFlow:
             return None
         return str(events[-1].get("reason_code", "")).strip() or None
 
+    def _localized_reason_text(self, profile: ScenarioProfile, reason_code: str, fallback: str) -> str:
+        if reason_code == "capability_expired":
+            ttl_seconds = profile.mutation.query_ttl_seconds or self._delegation_ttl_seconds("query", profile)
+            return f"查询令牌超过 {ttl_seconds} 秒有效期，系统已终止任务并发出超时告警。"
+        if reason_code == "delegation_exhausted":
+            return "查询令牌已被首次消费，再次调用会被识别为重放攻击并直接拦截。"
+        if reason_code == "approval_missing":
+            return "高风险发送动作缺少审批票据，系统已拒绝继续发送。"
+        if reason_code == "target_mismatch":
+            return "发送目标超出本次任务授权范围，系统已阻断错误发送。"
+        if reason_code == "resource_not_in_scope":
+            return "查询资源超出本次任务授权范围，系统已阻断越权访问。"
+        return fallback
+
     def _finalize_model_failure(
         self,
         profile: ScenarioProfile,
@@ -594,6 +700,7 @@ class RealCollaborationFlow:
         reason_code: str,
         reason_text: str,
     ) -> tuple[ScenarioResult, dict[str, object]]:
+        self.delegation_manager.revoke_for_task(runtime.task_id, reason="task_terminated")
         runtime.failure_stage = stage
         runtime.failure_reason = reason_text
         self._append_trace(runtime, stage, "error", reason_code, reason_text)
@@ -632,6 +739,7 @@ class RealCollaborationFlow:
         reason_code: str,
         reason_text: str,
     ) -> tuple[ScenarioResult, dict[str, object]]:
+        self.delegation_manager.revoke_for_task(runtime.task_id, reason="task_terminated")
         runtime.failure_stage = stage
         runtime.failure_reason = reason_text
         self._append_trace(runtime, stage, "denied", reason_code, reason_text)
@@ -663,6 +771,7 @@ class RealCollaborationFlow:
         return result, self._build_payload(runtime, result)
 
     def _finalize_success(self, profile: ScenarioProfile, runtime: FlowRuntime) -> tuple[ScenarioResult, dict[str, object]]:
+        self.delegation_manager.revoke_for_task(runtime.task_id, reason="task_completed_cleanup")
         self._append_trace(runtime, "task_finalize", "success", profile.success_reason_code, "多智能体办公链路执行完成。")
         self.audit_ledger.record(
             event_type="task_lifecycle",
@@ -708,6 +817,9 @@ class RealCollaborationFlow:
             "mail_request": runtime.mail_request,
             "mail_result": runtime.mail_result,
             "query_resource": runtime.query_resource,
+            "query_ttl_seconds": runtime.query_ttl_seconds,
+            "report_ttl_seconds": runtime.report_ttl_seconds,
+            "mail_ttl_seconds": runtime.mail_ttl_seconds,
             "planned_recipient": str(runtime.assistant_plan.get("recipient", "")).strip(),
             "final_recipient": str(runtime.mail_request.get("requested_target", "")).strip(),
             "report_output_name": runtime.output_name,
