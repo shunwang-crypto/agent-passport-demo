@@ -13,7 +13,7 @@ artifacts/
 .coverage
 _tmp_*.py
 
-workdir/
+workdir/outputs/
 
 *.log
 *.tmp
